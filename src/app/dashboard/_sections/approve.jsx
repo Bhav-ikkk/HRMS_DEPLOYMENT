@@ -1,108 +1,190 @@
 'use client';
-import * as React from 'react';
-import { Button, TextField, Grid, Stack, Typography, Snackbar } from '@mui/material';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 
-export default function LeaveRequestPage() {
-  const [startDate, setStartDate] = React.useState(null);
-  const [endDate, setEndDate] = React.useState(null);
-  const [reason, setReason] = React.useState('');
-  const [userId, setUserId] = React.useState(1); // You can replace this with the current user's ID
-  const [error, setError] = React.useState('');
-  const [successMessage, setSuccessMessage] = React.useState('');
+import React, { useEffect, useState } from 'react';
+import {
+  Container, Paper, Typography, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Button, Chip, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
+  Box, Stack, Divider
+} from '@mui/material';
+import { useSession } from 'next-auth/react';
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+export default function LeavePanel() {
+  const { data: session, status } = useSession();
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [error, setError] = useState(null);
+  const [selectedRequest, setSelectedRequest] = useState(null); // 👈 For detail dialog
 
-    // Prepare the data to send to the API
-    const data = { userId, startDate: startDate.toISOString(), endDate: endDate.toISOString(), reason };
+  const isAdmin = session?.user?.role === 'ADMIN';
 
+  const fetchLeaves = async () => {
     try {
-      const res = await fetch('/api/leave/request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
+      const res = await fetch('/api/leave/all');
+      if (!res.ok) throw new Error('Failed to fetch leave requests');
+      const data = await res.json();
 
-      const result = await res.json();
+      const filtered = isAdmin
+        ? data
+        : data.filter((req) => req.user?.email === session?.user?.email);
 
-      if (res.status === 200) {
-        setSuccessMessage('Leave request submitted successfully!');
-      } else {
-        setError(result.error || 'Something went wrong!');
-      }
+      setLeaveRequests(filtered);
+      setError(null);
     } catch (err) {
-      setError('Something went wrong with the request');
+      setError(err.message);
     }
   };
 
+  const updateStatus = async (id, status) => {
+    try {
+      const res = await fetch('/api/leave/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      if (!res.ok) throw new Error('Failed to update status');
+      await fetchLeaves();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  useEffect(() => {
+    if (status === 'authenticated') fetchLeaves();
+  }, [status]);
+
+  const formatDate = (date) => new Date(date).toISOString().split('T')[0];
+
   return (
-    <Stack spacing={3} sx={{ width: 400, margin: 'auto', padding: 2 }}>
-      <Typography variant="h4">Leave Request</Typography>
+    <Container maxWidth="lg" sx={{ mt: 6 }}>
+      <Paper elevation={4} sx={{ p: 4 }}>
+        <Typography variant="h4" gutterBottom>
+          Leave Requests
+        </Typography>
 
-      <form onSubmit={handleSubmit}>
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <TextField
-              label="Reason for Leave"
-              fullWidth
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              required
-            />
-          </Grid>
+        {error && <Alert severity="error">{error}</Alert>}
 
-          <Grid item xs={12}>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DateTimePicker
-                label="Start Date"
-                value={startDate}
-                onChange={(date) => setStartDate(date)}
-                renderInput={(params) => <TextField {...params} fullWidth required />}
-              />
-            </LocalizationProvider>
-          </Grid>
+        <TableContainer sx={{ mt: 3 }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Employee</TableCell>
+                <TableCell>Department</TableCell>
+                <TableCell>Reason</TableCell>
+                <TableCell>Start Date</TableCell>
+                <TableCell>End Date</TableCell>
+                <TableCell>Status</TableCell>
+                {isAdmin && <TableCell align="center">Actions</TableCell>}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {leaveRequests.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={isAdmin ? 7 : 6} align="center">
+                    No leave requests found.
+                  </TableCell>
+                </TableRow>
+              )}
+              {leaveRequests.map((req) => (
+                <TableRow key={req.id}>
+                  <TableCell>
+                    <Typography fontWeight={600}>
+                      {req.user?.name || 'N/A'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {req.user?.email || 'N/A'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{req.user?.department?.name || 'N/A'}</TableCell>
+                  <TableCell>{req.reason}</TableCell>
+                  <TableCell>{formatDate(req.startDate)}</TableCell>
+                  <TableCell>{formatDate(req.endDate)}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={req.status}
+                      color={
+                        req.status === 'APPROVED'
+                          ? 'success'
+                          : req.status === 'REJECTED'
+                          ? 'error'
+                          : 'warning'
+                      }
+                    />
+                  </TableCell>
+                  {isAdmin && (
+                    <TableCell align="center">
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          onClick={() => updateStatus(req.id, 'APPROVED')}
+                          color="success"
+                          variant="contained"
+                          size="small"
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          onClick={() => updateStatus(req.id, 'REJECTED')}
+                          color="error"
+                          variant="contained"
+                          size="small"
+                        >
+                          Reject
+                        </Button>
+                        <Button
+                          onClick={() => updateStatus(req.id, 'PENDING')}
+                          color="warning"
+                          variant="contained"
+                          size="small"
+                        >
+                          Pending
+                        </Button>
+                        <Button
+                          onClick={() => setSelectedRequest(req)}
+                          color="info"
+                          variant="outlined"
+                          size="small"
+                        >
+                          View Report
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
 
-          <Grid item xs={12}>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DateTimePicker
-                label="End Date"
-                value={endDate}
-                onChange={(date) => setEndDate(date)}
-                renderInput={(params) => <TextField {...params} fullWidth required />}
-              />
-            </LocalizationProvider>
-          </Grid>
-
-          <Grid item xs={12}>
-            <Button type="submit" variant="contained" fullWidth>
-              Submit Leave Request
-            </Button>
-          </Grid>
-        </Grid>
-      </form>
-
-      {error && (
-        <Snackbar
-          open={Boolean(error)}
-          onClose={() => setError('')}
-          message={error}
-          autoHideDuration={6000}
-        />
-      )}
-
-      {successMessage && (
-        <Snackbar
-          open={Boolean(successMessage)}
-          onClose={() => setSuccessMessage('')}
-          message={successMessage}
-          autoHideDuration={6000}
-        />
-      )}
-    </Stack>
+      {/* 🧾 Dialog for Leave Report */}
+      <Dialog
+        open={!!selectedRequest}
+        onClose={() => setSelectedRequest(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Leave Request Report</DialogTitle>
+        <DialogContent dividers>
+          {selectedRequest && (
+            <Box>
+              <Typography><strong>Employee:</strong> {selectedRequest.user?.name} ({selectedRequest.user?.email})</Typography>
+              <Typography><strong>Department:</strong> {selectedRequest.user?.department?.name || 'N/A'}</Typography>
+              <Typography sx={{ mt: 2 }}><strong>Reason:</strong></Typography>
+              <Typography>{selectedRequest.reason}</Typography>
+              <Divider sx={{ my: 2 }} />
+              <Typography><strong>Start Date:</strong> {formatDate(selectedRequest.startDate)}</Typography>
+              <Typography><strong>End Date:</strong> {formatDate(selectedRequest.endDate)}</Typography>
+              <Typography><strong>Status:</strong> {selectedRequest.status}</Typography>
+              <Typography sx={{ mt: 2, fontStyle: 'italic' }} color="text.secondary">
+                Requested on: {formatDate(selectedRequest.createdAt)}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedRequest(null)} variant="contained" color="primary">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Container>
   );
 }

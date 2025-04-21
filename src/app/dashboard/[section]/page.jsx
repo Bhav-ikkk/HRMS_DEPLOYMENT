@@ -7,8 +7,8 @@ const SectionComponents = {
   employee: dynamic(() => import('@/app/dashboard/_sections/employee')),
   department: dynamic(() => import('@/app/dashboard/_sections/department')),
   time_status: dynamic(() => import('@/app/dashboard/_sections/time_status')),
-  // leave_request: dynamic(() => import('@/app/dashboard/_sections/leave_request')),
-  approve: dynamic(() => import('@/app/dashboard/_sections/approve')),
+  leave_request: dynamic(() => import('@/app/dashboard/_sections/leave_request')),
+   approve: dynamic(() => import('@/app/dashboard/_sections/approve')),
   profile: dynamic(() => import('@/app/dashboard/_sections/profile')),
 
 };

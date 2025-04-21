@@ -1,90 +1,153 @@
 'use client';
 import * as React from 'react';
 import {
-  Stack,
-  Typography,
-  TextField,
-  MenuItem,
-  Card,
-  CardContent,
-  CircularProgress,
+  Stack, Typography, TextField, MenuItem, Card,
+  CardContent, CircularProgress, Divider, Box,
+  ToggleButtonGroup, ToggleButton, Button,
 } from '@mui/material';
+import { DataGrid } from '@mui/x-data-grid';
 import { BarChart } from '@mui/x-charts/BarChart';
 import { axisClasses } from '@mui/x-charts/ChartsAxis';
-import { DataGrid } from '@mui/x-data-grid';
+import { useSession, signOut } from 'next-auth/react';
+
+const getDateKey = (date) => new Date(date).toLocaleDateString();
 
 export default function TimeStatusPage() {
   const [data, setData] = React.useState([]);
-  const [layout, setLayout] = React.useState('vertical');
   const [loading, setLoading] = React.useState(true);
+  const [viewMode, setViewMode] = React.useState('chart');
   const [employeeFilter, setEmployeeFilter] = React.useState('');
   const [dateFilter, setDateFilter] = React.useState('');
+  const { data: session, status } = useSession();
 
   React.useEffect(() => {
     const fetchData = async () => {
-      const res = await fetch('/api/admin/traces');
-      const json = await res.json();
-      setData(json);
-      setLoading(false);
+      try {
+        const res = await fetch('/api/admin/traces', {
+          cache: 'no-store',
+        });
+        const json = await res.json();
+        setData(json);
+      } catch (err) {
+        console.error('Failed to fetch trace data:', err);
+      } finally {
+        setLoading(false);
+      }
     };
+
     fetchData();
   }, []);
 
+  const handleLogout = async () => {
+    if (status === 'authenticated' && session?.user?.id) {
+      console.log('Calling /api/logout for user:', session.user.id);
+      try {
+        const res = await fetch('/api/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: session.user.id }),
+        });
+
+        const result = await res.json();
+        console.log('Logout API response:', result);
+
+        if (!res.ok) {
+          console.error('Logout API failed with status:', res.status);
+        }
+      } catch (err) {
+        console.error('Logout API error:', err);
+      }
+    } else {
+      console.warn('Session or user ID not available');
+    }
+
+    await signOut({ callbackUrl: '/login' });
+  };
+
   const filteredData = data.filter((log) => {
-    const loginDate = new Date(log.loginAt).toLocaleDateString();
+    const loginDate = getDateKey(log.loginAt);
     return (
       (!employeeFilter || log.user.name.toLowerCase().includes(employeeFilter.toLowerCase())) &&
-      (!dateFilter || loginDate === dateFilter)
+      (!dateFilter || loginDate === getDateKey(dateFilter))
     );
   });
 
-  const formatChartData = () => {
-    const grouped = {};
+  const sessionMap = {};
+  const employeeSet = new Set();
+  const dateSet = new Set();
 
-    filteredData.forEach(({ user, loginAt, logoutAt }) => {
-      const date = new Date(loginAt).toLocaleDateString();
-      const name = user.name;
-      const key = `${name} - ${date}`;
+  filteredData.forEach(({ user, loginAt, logoutAt }) => {
+    const date = getDateKey(loginAt);
+    const key = `${user.name} - ${date}`;
+    employeeSet.add(user.name);
+    dateSet.add(date);
 
-      const hours = logoutAt
-        ? (new Date(logoutAt) - new Date(loginAt)) / 1000 / 60 / 60
-        : 0;
+    const hours = logoutAt ? (new Date(logoutAt) - new Date(loginAt)) / 1000 / 60 / 60 : 0;
 
-      if (!grouped[key]) {
-        grouped[key] = { order: key, sessions: 0, totalHours: 0 };
-      }
+    if (!sessionMap[key]) {
+      sessionMap[key] = {
+        order: key,
+        sessions: 0,
+        totalHours: 0,
+        name: user.name,
+        email: user.email,
+        date,
+      };
+    }
 
-      grouped[key].sessions += 1;
-      grouped[key].totalHours += hours;
-    });
+    sessionMap[key].sessions += 1;
+    sessionMap[key].totalHours += hours;
+  });
 
-    return Object.values(grouped);
+  const chartData = Object.values(sessionMap);
+
+  const allEmployees = Array.from(employeeSet).sort();
+  const allDates = Array.from(dateSet).sort((a, b) => new Date(a) - new Date(b));
+
+  const getHeatColor = (hours) => {
+    if (hours === 0) return '#eeeeee';
+    if (hours < 1) return '#c8e6c9';
+    if (hours < 3) return '#81c784';
+    if (hours < 6) return '#4caf50';
+    return '#2e7d32';
   };
 
-  const chartData = formatChartData();
+  const handleViewChange = (_, newView) => {
+    if (newView) setViewMode(newView);
+  };
 
-  const chartSettingsH = {
+  const chartSettings = {
     dataset: chartData,
-    height: 350,
-    yAxis: [{ scaleType: 'band', dataKey: 'order' }],
+    xAxis: [{ scaleType: 'band', dataKey: 'order' }],
+    height: 400,
+    borderRadius: 8,
+    series: [
+      {
+        dataKey: 'sessions',
+        label: 'Sessions',
+        stack: 'attendance',
+        color: '#1976d2',
+      },
+      {
+        dataKey: 'totalHours',
+        label: 'Total Hours',
+        stack: 'attendance',
+        color: '#2e7d32',
+      },
+    ],
+    slotProps: {
+      legend: {
+        direction: 'row',
+        position: { vertical: 'bottom', horizontal: 'middle' },
+      },
+    },
     sx: {
       [`& .${axisClasses.directionY} .${axisClasses.label}`]: {
         transform: 'translateX(-10px)',
       },
     },
-    slotProps: {
-      legend: {
-        direction: 'row',
-        position: { vertical: 'bottom', horizontal: 'middle' },
-        padding: -5,
-      },
-    },
-  };
-
-  const chartSettingsV = {
-    ...chartSettingsH,
-    xAxis: [{ scaleType: 'band', dataKey: 'order' }],
-    yAxis: undefined,
   };
 
   const columns = [
@@ -111,11 +174,12 @@ export default function TimeStatusPage() {
   });
 
   return (
-    <Stack spacing={4} sx={{ padding: 4 }}>
-      <Typography variant="h4">Employee Login/Logout Dashboard</Typography>
+    <Stack spacing={4} sx={{ p: 4 }}>
+      <Typography variant="h4" fontWeight={600}>Employee Time Insights</Typography>
+      <Divider />
 
-      {/* Filters */}
-      <Stack direction="row" spacing={2}>
+      {/* Filter Bar */}
+      <Stack direction="row" spacing={2} alignItems="center">
         <TextField
           label="Search Employee"
           value={employeeFilter}
@@ -129,55 +193,94 @@ export default function TimeStatusPage() {
           value={dateFilter}
           onChange={(e) => setDateFilter(e.target.value)}
         />
-        <TextField
-          select
-          label="Layout"
-          value={layout}
-          onChange={(e) => setLayout(e.target.value)}
-          sx={{ minWidth: 150 }}
+        <ToggleButtonGroup
+          value={viewMode}
+          exclusive
+          onChange={handleViewChange}
+          size="small"
         >
-          <MenuItem value="horizontal">Horizontal</MenuItem>
-          <MenuItem value="vertical">Vertical</MenuItem>
-        </TextField>
+          <ToggleButton value="chart">Chart</ToggleButton>
+          <ToggleButton value="heatmap">Heatmap</ToggleButton>
+        </ToggleButtonGroup>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleLogout}
+          disabled={status !== 'authenticated'}
+          sx={{ ml: 'auto' }}
+        >
+          Logout
+        </Button>
       </Stack>
 
-      {/* Graph */}
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Login / Logout Summary Graph
-          </Typography>
-          {loading ? (
-            <CircularProgress />
-          ) : (
-            <BarChart
-              series={[
-                {
-                  dataKey: 'sessions',
-                  label: 'Sessions',
-                  stack: 'stack',
-                  layout,
-                },
-                {
-                  dataKey: 'totalHours',
-                  label: 'Total Hours',
-                  stack: 'stack',
-                  layout,
-                },
-              ]}
-              {...(layout === 'vertical' ? chartSettingsV : chartSettingsH)}
-              borderRadius={10}
-            />
-          )}
-        </CardContent>
-      </Card>
+      {/* Chart View */}
+      {viewMode === 'chart' && (
+        <Card elevation={4}>
+          <CardContent>
+            <Typography variant="h6">Stacked Bar Chart</Typography>
+            {loading ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <BarChart {...chartSettings} />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Table */}
-      <Card>
+      {/* Heatmap View */}
+      {viewMode === 'heatmap' && (
+        <Card elevation={4}>
+          <CardContent>
+            <Typography variant="h6">Attendance Heatmap</Typography>
+            <Box sx={{ overflowX: 'auto', mt: 2 }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: 8 }}>Employee</th>
+                    {allDates.map((date) => (
+                      <th key={date} style={{ padding: 8 }}>{date}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allEmployees.map((emp) => (
+                    <tr key={emp}>
+                      <td style={{ padding: 8, fontWeight: 600 }}>{emp}</td>
+                      {allDates.map((date) => {
+                        const match = sessionMap[`${emp} - ${date}`];
+                        const hours = match?.totalHours || 0;
+                        return (
+                          <td
+                            key={`${emp}-${date}`}
+                            title={`${hours.toFixed(2)} hrs`}
+                            style={{
+                              backgroundColor: getHeatColor(hours),
+                              textAlign: 'center',
+                              padding: '8px',
+                              color: hours > 0 ? '#fff' : '#888',
+                              fontWeight: 500,
+                              minWidth: 60,
+                            }}
+                          >
+                            {hours > 0 ? `${hours.toFixed(1)}` : '-'}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Full Table of Sessions */}
+      <Card elevation={3}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Detailed Logs
-          </Typography>
+          <Typography variant="h6" gutterBottom>Detailed Logs</Typography>
           <div style={{ height: 400, width: '100%' }}>
             <DataGrid
               rows={rows}

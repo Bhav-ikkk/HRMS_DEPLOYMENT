@@ -10,7 +10,6 @@ export const defineAbilitiesFor = (role) => {
     can('manage', 'Department');
     can('view', 'LeaveStatus');
     can('view', 'OwnTime');
-    can('request', 'Leave');
   } else if (role === 'employee') {
     can('view', 'OwnTime');
     can('request', 'Leave');
