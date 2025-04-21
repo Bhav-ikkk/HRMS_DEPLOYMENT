@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   Typography,
   Grid,
@@ -10,26 +10,26 @@ import {
   Alert,
   Paper,
   Divider,
-} from '@mui/material';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { useSession } from 'next-auth/react';
+} from "@mui/material";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { useSession } from "next-auth/react";
 
 export default function LeaveRequestPage() {
   const { data: session, status } = useSession();
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const [userId, setUserId] = useState(null);
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
-    if (status === 'authenticated' && session?.user?.id) {
+    if (status === "authenticated" && session?.user?.id) {
       setUserId(session.user.id);
-    } else if (status === 'unauthenticated') {
-      setError('You must be logged in to submit a leave request.');
+    } else if (status === "unauthenticated") {
+      setError("You must be logged in to submit a leave request.");
     }
   }, [session, status]);
 
@@ -39,7 +39,7 @@ export default function LeaveRequestPage() {
     e.preventDefault();
 
     if (!userId || !startDate || !endDate || !reason || !isValidDateRange) {
-      setError('Please fill all fields correctly.');
+      setError("Please fill all fields correctly.");
       return;
     }
 
@@ -51,25 +51,25 @@ export default function LeaveRequestPage() {
     };
 
     try {
-      const res = await fetch('/api/leave/request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/leave/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
 
       const result = await res.json();
 
-      if (res.status === 200) {
-        setSuccessMessage('Leave request submitted successfully!');
-        setError('');
-        setReason('');
+      if (res.ok) {
+        setSuccessMessage("Leave request submitted successfully!");
+        setError("");
+        setReason("");
         setStartDate(null);
         setEndDate(null);
       } else {
-        setError(result.error || 'Something went wrong!');
+        setError(result.error || "Something went wrong!");
       }
     } catch {
-      setError('Something went wrong with the request.');
+      setError("Something went wrong with the request.");
     }
   };
 
@@ -77,8 +77,8 @@ export default function LeaveRequestPage() {
     <Paper
       elevation={6}
       sx={{
-        maxWidth: '1000px',
-        mx: 'auto',
+        maxWidth: "1000px",
+        mx: "auto",
         my: 6,
         p: 6,
         borderRadius: 4,
@@ -87,7 +87,12 @@ export default function LeaveRequestPage() {
       <Typography variant="h3" fontWeight="bold" align="center" gutterBottom>
         Leave Request
       </Typography>
-      <Typography variant="subtitle1" align="center" color="text.secondary" sx={{ mb: 4 }}>
+      <Typography
+        variant="subtitle1"
+        align="center"
+        color="text.secondary"
+        sx={{ mb: 4 }}
+      >
         Submit your official leave request for approval.
       </Typography>
 
@@ -102,7 +107,7 @@ export default function LeaveRequestPage() {
       <form onSubmit={handleSubmit}>
         <Grid container spacing={4}>
           {/* Left side: Full height text area */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={8}>
             <TextField
               label="Reason for Leave"
               placeholder="Describe your reason in detail..."
@@ -114,6 +119,7 @@ export default function LeaveRequestPage() {
               variant="outlined"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
+              sx={{ width: "100%" }} // This ensures it uses the grid width
             />
           </Grid>
 
@@ -126,7 +132,9 @@ export default function LeaveRequestPage() {
                     label="Start Date & Time"
                     value={startDate}
                     onChange={(date) => setStartDate(date)}
-                    renderInput={(params) => <TextField {...params} fullWidth required />}
+                    renderInput={(params) => (
+                      <TextField {...params} fullWidth required />
+                    )}
                     disablePast
                   />
                 </LocalizationProvider>
@@ -138,7 +146,9 @@ export default function LeaveRequestPage() {
                     label="End Date & Time"
                     value={endDate}
                     onChange={(date) => setEndDate(date)}
-                    renderInput={(params) => <TextField {...params} fullWidth required />}
+                    renderInput={(params) => (
+                      <TextField {...params} fullWidth required />
+                    )}
                     disablePast
                   />
                 </LocalizationProvider>
@@ -151,7 +161,7 @@ export default function LeaveRequestPage() {
                   fullWidth
                   size="large"
                   disabled={!isValidDateRange || !userId}
-                  sx={{ py: 1.5, fontSize: '1rem', fontWeight: 'bold' }}
+                  sx={{ py: 1.5, fontSize: "1rem", fontWeight: "bold" }}
                 >
                   Submit Leave Request
                 </Button>
@@ -162,14 +172,22 @@ export default function LeaveRequestPage() {
       </form>
 
       {/* Notifications */}
-      <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
-        <Alert severity="error" onClose={() => setError('')}>
+      <Snackbar
+        open={!!error}
+        autoHideDuration={6000}
+        onClose={() => setError("")}
+      >
+        <Alert severity="error" onClose={() => setError("")}>
           {error}
         </Alert>
       </Snackbar>
 
-      <Snackbar open={!!successMessage} autoHideDuration={6000} onClose={() => setSuccessMessage('')}>
-        <Alert severity="success" onClose={() => setSuccessMessage('')}>
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={6000}
+        onClose={() => setSuccessMessage("")}
+      >
+        <Alert severity="success" onClose={() => setSuccessMessage("")}>
           {successMessage}
         </Alert>
       </Snackbar>

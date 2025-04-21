@@ -159,7 +159,7 @@ export default function LoginPage() {
             color="primary"
             sx={{ mb: 2 }}
           >
-            SmartHR
+            TeamTree
           </Typography>
           <Typography variant="h6" color="text.secondary" sx={{ mb: 3 }}>
             Sign in to your account
